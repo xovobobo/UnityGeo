@@ -1,0 +1,20 @@
+{
+  "name": "com.ars.customgeo",
+  "version": "0.0.1",
+  "displayName": "Custom Geo Framework",
+  "description": "Package designed for seamless conversion between various coordinate systems and visualization of tile-based maps",
+  "unity": "2020.3",
+  "unityRelease": "23f1",
+  "dependencies": {
+    "com.unity.gis.high-precision-framework": "1.0.0"
+  },
+  "keywords": [
+    "Geo",
+    "Tile map",
+    "Gis"
+  ],
+  "author": {
+    "name": "ARS",
+    "url": "https://www.unity3d.com"
+  }
+}
