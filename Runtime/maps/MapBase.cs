@@ -12,6 +12,7 @@ namespace CustomGeo
         public int zoom = 12;
         public int blocks = 1;
 
+        private protected GameObject tiles;
 
         public abstract void generateBlocks();
 

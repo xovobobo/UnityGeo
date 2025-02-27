@@ -365,9 +365,11 @@ MonoBehaviour:
   LatOrigin: 55.75706
   LonOrigin: 48.7572
   tilemapUrl: 'http://127.0.0.1:4444/wmts/google_terrain/base_grid/{z}/{x}/{y}.png '
-  zoom: 19
-  blocks: 5
-  altOrigin: 220
+  zoom: 5
+  blocks: 20
+  altOrigin: 0
+  looking_tf: {fileID: 1274341490}
+  regenerate: 0
   ecef_origin:
     x: 0
     y: 0
