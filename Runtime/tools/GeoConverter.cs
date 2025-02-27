@@ -39,7 +39,6 @@ namespace CustomGeo
             return new UnityEngineDouble.Vector2d(lat, lon);
         }
 
-
         public static UnityEngineDouble.Vector3d epsg4979_to_epsg4978(double lat, double lon, double alt)
         {
             const double A = 6378137.0; // Semi-major axis
@@ -56,25 +55,6 @@ namespace CustomGeo
             double Z = (Math.Pow(B, 2) / Math.Pow(A, 2) * N + alt) * Math.Sin(lat_rad);
             return new UnityEngineDouble.Vector3d(X, Y, Z);
         }
-
-        public static UnityEngineDouble.Vector3d ECEFToUnity(UnityEngineDouble.Vector3d pose, UnityEngineDouble.Vector3d ecef_origin_ref)
-        {
-            return new UnityEngineDouble.Vector3d(
-                pose.x - ecef_origin_ref.x,
-                pose.z - ecef_origin_ref.z,
-                pose.y - ecef_origin_ref.y
-            );
-        }
-
-        public static UnityEngineDouble.Vector3d epsg3857ToUnity(UnityEngineDouble.Vector2d pose, UnityEngineDouble.Vector2d origin_ref)
-        {
-            return new UnityEngineDouble.Vector3d(
-                origin_ref.x - pose.x,
-                0,
-                origin_ref.y - pose.y
-            );
-        }
-
         public static UnityEngineDouble.Vector3d epsg4978_to_epsg4979(double x, double y, double z)
         {
             double a = 6378137; // radius
@@ -98,6 +78,24 @@ namespace CustomGeo
             lat = lat * 180 / Math.PI;
             lon = lon * 180 / Math.PI;
             return new UnityEngineDouble.Vector3d(lat, lon, alt);
+        }
+
+        public static UnityEngineDouble.Vector3d ECEFToUnity(UnityEngineDouble.Vector3d pose, UnityEngineDouble.Vector3d ecef_origin_ref, UnityEngineDouble.QuaternionD ecef_origin_rot_ref)
+        {
+            return ecef_origin_rot_ref * new UnityEngineDouble.Vector3d(
+                pose.x - ecef_origin_ref.x,
+                pose.z - ecef_origin_ref.z,
+                pose.y - ecef_origin_ref.y
+            );
+        }
+
+        public static UnityEngineDouble.Vector3d epsg3857ToUnity(UnityEngineDouble.Vector2d pose, UnityEngineDouble.Vector2d origin_ref)
+        {
+            return new UnityEngineDouble.Vector3d(
+                origin_ref.x - pose.x,
+                0,
+                origin_ref.y - pose.y
+            );
         }
 
         public static (double x, double y) WorldToTilePos(double lon, double lat, int zoom)

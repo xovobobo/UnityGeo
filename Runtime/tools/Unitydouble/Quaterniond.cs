@@ -58,6 +58,27 @@ namespace UnityEngineDouble
             }
         }
 
+        public static void OrthoNormalize(ref Vector3d normal, ref Vector3d tangent)
+        {
+            normal.Normalize();
+            tangent.Normalize(); // Additional normalization, avoids large tangent norm
+            var proj = normal * Vector3d.Dot(tangent, normal);
+            tangent = tangent - proj;
+            tangent.Normalize();
+        }
+
+        public static QuaternionD LookRotation(Vector3d forward, Vector3d up)
+        {
+            OrthoNormalize(ref forward, ref up);
+            Vector3d right = Vector3d.Cross(up, forward);
+            double w = Math.Sqrt(1.0d + right.x + up.y + forward.z) * 0.5d;
+            double r = 0.25d / w;
+            double x = (up.z - forward.y) * r;
+            double y = (forward.x - right.z) * r;
+            double z = (right.y - up.x) * r;
+            return new QuaternionD(x, y, z, w);
+        }
+
         public static QuaternionD AngleAxis(double angle, Vector3d axis)
         {
             axis.Normalize();
@@ -72,20 +93,26 @@ namespace UnityEngineDouble
             );
         }
 
+        public UnityEngine.Quaternion Quaternionf()
+        {
+            return new UnityEngine.Quaternion((float)this.x, (float)this.y, (float)this.z, (float)this.w);
+        }
+
+
         public QuaternionD(double x, double y, double z, double w)
-		{
-			this.x = x;
-			this.y = y;
-			this.z = z;
-			this.w = w;
-		}
-		public void Set(double new_x, double new_y, double new_z, double new_w)
-		{
-			this.x = new_x;
-			this.y = new_y;
-			this.z = new_z;
-			this.w = new_w;
-		}
+        {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.w = w;
+        }
+        public void Set(double new_x, double new_y, double new_z, double new_w)
+        {
+            this.x = new_x;
+            this.y = new_y;
+            this.z = new_z;
+            this.w = new_w;
+        }
 
         public static QuaternionD EulerDeg(Vector3d vec)
         {
@@ -129,7 +156,7 @@ namespace UnityEngineDouble
             double num10 = rotation.w * num;
             double num11 = rotation.w * num2;
             double num12 = rotation.w * num3;
-            
+
             Vector3d result;
             result.x = (1.0 - (num5 + num6)) * point.x + (num7 - num12) * point.y + (num8 + num11) * point.z;
             result.y = (num7 + num12) * point.x + (1 - (num4 + num6)) * point.y + (num9 - num10) * point.z;
@@ -156,23 +183,23 @@ namespace UnityEngineDouble
         public override string ToString()
         {
             return String.Format("({0:F6}, {1:F6}, {2:F6}, {3:F6})", new object[]
-			{
-				this.x,
-				this.y,
-				this.z,
-				this.w
-			});
+            {
+                this.x,
+                this.y,
+                this.z,
+                this.w
+            });
         }
         public string ToString(string format)
         {
             return String.Format("({0}, {1}, {2}, {3})", new object[]
-			{
-				this.x.ToString(format),
-				this.y.ToString(format),
-				this.z.ToString(format),
-				this.w.ToString(format)
-			});
+            {
+                this.x.ToString(format),
+                this.y.ToString(format),
+                this.z.ToString(format),
+                this.w.ToString(format)
+            });
         }
- 
+
     }
 }
