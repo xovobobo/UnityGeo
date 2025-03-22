@@ -9,7 +9,7 @@ namespace CustomGeo
     {
         public double altOrigin = 0;
         public HPTransform looking_tf;
-        public bool regenerate = false;
+        public bool udpateGravity = false;
 
         [Header("Debug")]
         public UnityEngineDouble.Vector3d ecef_origin;
@@ -23,9 +23,12 @@ namespace CustomGeo
 
         public void Update()
         {
-            var direction = ecef_center_mass_.UniversePosition - looking_tf.UniversePosition;
-            var gravity = new UnityEngineDouble.Vector3d(direction.x, direction.y, direction.z).normalized * Physics.gravity.magnitude;
-            Physics.gravity = gravity.Vector3f();
+            if (udpateGravity)
+            {
+                var direction = ecef_center_mass_.UniversePosition - looking_tf.UniversePosition;
+                var gravity = new UnityEngineDouble.Vector3d(direction.x, direction.y, direction.z).normalized * Physics.gravity.magnitude;
+                Physics.gravity = gravity.Vector3f();
+            }
         }
 
         public (UnityEngineDouble.Vector3d ecef_pose_origin, UnityEngineDouble.QuaternionD ecef_rot_origin) GetLocalTangent(UnityEngineDouble.Vector3d lla)
