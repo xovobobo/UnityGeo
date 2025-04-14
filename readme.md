@@ -30,12 +30,8 @@
 
 ## Installation
 
-### 1. Install High-Precision-Framework
+### 1. Install Custom Geo
 - Go to `Window` > `Package Manager` to open the Package Manager window.
 - Click the `+` button in the top left corner.
 - Select `Add package from git URL...`.
-- Add the following link `https://github.com/Unity-Technologies/com.unity.gis.high-precision-framework.git`
-
-### 2. Install Custom Geo
-- Once the High-Precision Framework is installed, repeat the process to add the Custom Geo library.
 - Add the following link `https://github.com/xovobobo/UnityGeo.git`

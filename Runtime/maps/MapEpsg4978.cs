@@ -1,21 +1,19 @@
 using UnityEngine;
-using Unity.Geospatial.HighPrecision;
 using System.Collections.Generic;
 
 namespace CustomGeo
 {
-    [RequireComponent(typeof(HPRoot))]
     public class MapEpsg4978 : MapBase
     {
         public double altOrigin = 0;
-        public HPTransform looking_tf;
+        public Transform looking_tf;
         public bool udpateGravity = false;
 
         [Header("Debug")]
         public UnityEngineDouble.Vector3d ecef_origin;
         public UnityEngineDouble.QuaternionD ecef_origin_rot;
 
-        private HPTransform ecef_center_mass_;
+        private Transform ecef_center_mass_;
         public void Start()
         {
             generateBlocks();
@@ -25,7 +23,7 @@ namespace CustomGeo
         {
             if (udpateGravity)
             {
-                var direction = ecef_center_mass_.UniversePosition - looking_tf.UniversePosition;
+                var direction = ecef_center_mass_.transform.position - looking_tf.transform.position;
                 var gravity = new UnityEngineDouble.Vector3d(direction.x, direction.y, direction.z).normalized * Physics.gravity.magnitude;
                 Physics.gravity = gravity.Vector3f();
             }
@@ -49,14 +47,14 @@ namespace CustomGeo
 
             tiles = new GameObject("tiles");
             tiles.transform.parent = this.transform;
-            HPTransform tf = tiles.AddComponent<HPTransform>();
 
-            var ecef_0_0_0 = new UnityEngineDouble.Vector3d(0, 0, 0);
-            var unity_ecef_0_0_0 = CustomGeo.GeoConverter.ECEFToUnity(ecef_0_0_0, ecef_origin, ecef_origin_rot);
+            var ecef_0_0_0 = new UnityEngineDouble.Vector3d(this.transform.position.x, this.transform.position.y, this.transform.position.z);
+            var unity_ecef_0_0_0 = CustomGeo.GeoConverter.ECEFToUnity(ecef_0_0_0, ecef_origin, ecef_origin_rot).Vector3f();
 
             GameObject center_mass = new GameObject("center_mass");
-            ecef_center_mass_ = center_mass.AddComponent<HPTransform>();
-            ecef_center_mass_.SetLocalPosition(new Unity.Mathematics.double3(unity_ecef_0_0_0.x, unity_ecef_0_0_0.y, unity_ecef_0_0_0.z));
+            ecef_center_mass_ = center_mass.transform;
+
+            ecef_center_mass_.transform.position = unity_ecef_0_0_0;
 
             int maxTiles = 1 << zoom;
             HashSet<(int, int)> uniqueTiles = new HashSet<(int, int)>();

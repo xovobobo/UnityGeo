@@ -1,10 +1,8 @@
-using Unity.Geospatial.HighPrecision;
 using UnityEngine;
 
 
 namespace CustomGeo
 {
-    [RequireComponent(typeof(HPTransform))]
     public class TileObjectEpsg4978 : TileBase
     {
         private new MapEpsg4978 map_;
@@ -12,13 +10,10 @@ namespace CustomGeo
         public override void GenerateTile(MonoBehaviour parent)
         {
             map_ = parent.GetComponent<MapEpsg4978>();
-            HPTransform hp_tf = GetComponent<HPTransform>();
+            Transform hp_tf = this.transform;
 
-            var hpposition = new Unity.Mathematics.double3(
-                0, 0, 0
-            );
-            hp_tf.SetLocalPosition(hpposition);
-            hp_tf.LocalRotation = Quaternion.identity;
+            hp_tf.localPosition = new Vector3(map_.transform.position.x, map_.transform.position.y, map_.transform.position.z);
+            hp_tf.localRotation = Quaternion.identity;
 
             MeshFilter meshFilter = this.gameObject.AddComponent<MeshFilter>();
             MeshRenderer meshRenderer = this.gameObject.AddComponent<MeshRenderer>();

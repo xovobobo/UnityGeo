@@ -1,25 +1,15 @@
-using Unity.Geospatial.HighPrecision;
 using UnityEngine;
-
 
 namespace CustomGeo
 {
-    [RequireComponent(typeof(HPTransform))]
     public class CoordinateGetter4978 : MonoBehaviour
     {
         public MapEpsg4978 map;
-
 
         [Header("Debug")]
         public UnityEngineDouble.Vector3d epsg4978;
         public UnityEngineDouble.Vector3d epsg4979;
 
-        private HPTransform hptf_;
-
-        private void Start()
-        {
-            hptf_ = GetComponent<HPTransform>();
-        }
 
         private UnityEngineDouble.Vector3d ConvertUnityToECEF(UnityEngineDouble.Vector3d unityPose)
         {
@@ -35,10 +25,11 @@ namespace CustomGeo
 
         void Update()
         {
+            Vector3 localPos = map.transform.InverseTransformPoint(this.transform.position);
             var p = new UnityEngineDouble.Vector3d(
-                hptf_.LocalPosition.x,
-                hptf_.LocalPosition.y,
-                hptf_.LocalPosition.z
+                localPos.x,
+                localPos.y,
+                localPos.z
             );
 
             epsg4978 = ConvertUnityToECEF(p);

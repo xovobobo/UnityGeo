@@ -1,9 +1,7 @@
 using UnityEngine;
-using Unity.Geospatial.HighPrecision;
 
 namespace CustomGeo
 {
-    [RequireComponent(typeof(HPRoot))]
     public class MapEpsg3857 : MapBase
     {
         [Header("Debug")]

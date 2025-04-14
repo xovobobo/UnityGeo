@@ -1,11 +1,7 @@
-using Unity.Geospatial.HighPrecision;
-using Unity.Mathematics;
 using UnityEngine;
-
 
 namespace CustomGeo
 {
-    [RequireComponent(typeof(HPTransform))]
     public class TileObjectEpsg3857 : TileBase
     {
         private MapEpsg3857 map_;
@@ -14,20 +10,19 @@ namespace CustomGeo
         {
 
             map_ = parent.GetComponent<MapEpsg3857>();
-            HPRoot hp_root = parent.GetComponent<HPRoot>();
-            HPTransform hp_tf = GetComponent<HPTransform>();
+            Transform hp_root = parent.transform;
+            Transform hp_tf = this.transform;
 
 
-            var hpposition = new Unity.Mathematics.double3(
+            var hpposition = new Vector3(
                 hp_root.transform.localPosition.x,
                 0,
                 hp_root.transform.localPosition.z
             );
 
 
-            hp_tf.SetLocalPosition(hpposition);
-            var q = Quaternion.Euler(0, -180, 0);
-            hp_tf.LocalRotation = new quaternion(q.x, q.y, q.z, q.w);
+            transform.localPosition = hpposition;
+            hp_tf.localRotation = Quaternion.Euler(0, -180, 0);
 
             MeshFilter meshFilter = this.gameObject.AddComponent<MeshFilter>();
             MeshRenderer meshRenderer = this.gameObject.AddComponent<MeshRenderer>();
@@ -47,16 +42,16 @@ namespace CustomGeo
 
             int[] triangles = new int[6]
             {
-            0, 1, 2,
-            2, 3, 0
+                0, 1, 2,
+                2, 3, 0
             };
 
             Vector2[] uv = new Vector2[4]
             {
-            new Vector2(0, 1),
-            new Vector2(1, 1),
-            new Vector2(1, 0),
-            new Vector2(0, 0)
+                new Vector2(0, 1),
+                new Vector2(1, 1),
+                new Vector2(1, 0),
+                new Vector2(0, 0)
             };
 
             mesh.vertices = vertices;
