@@ -41,10 +41,17 @@ namespace CustomGeo
                     if (uwr.result == UnityWebRequest.Result.Success)
                     {
                         Texture2D tileTexture = DownloadHandlerTexture.GetContent(uwr);
+#if UNITY_PIPELINE_HDRP
+     Material tileMaterial = new Material(Shader.Find("HDRP/Lit"))
+#else
                         Material tileMaterial = new Material(Shader.Find("Standard"))
+#endif
                         {
                             mainTexture = tileTexture
                         };
+#if UNITY_PIPELINE_HDRP
+                        tileMaterial.SetFloat("_Smoothness", 0.0f);
+#endif
                         tileMaterial.SetFloat("_Glossiness", 0.0f);
                         tileObject.GetComponent<Renderer>().material = tileMaterial;
                         yield break;
