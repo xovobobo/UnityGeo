@@ -8,6 +8,7 @@ namespace CustomGeo
         public double altOrigin = 0;
         public Transform looking_tf;
         public bool udpateGravity = false;
+        public bool generateTiles = false;
 
         [Header("Debug")]
         public UnityEngineDouble.Vector3d ecef_origin;
@@ -45,39 +46,42 @@ namespace CustomGeo
             (ecef_origin, ecef_origin_rot) = GetLocalTangent(epsg4979);
             CustomGeo.Tile tile_main = new CustomGeo.Tile(lat: LatOrigin, lon: LonOrigin, zoom: zoom);
 
-            tiles = new GameObject("tiles");
-            tiles.transform.parent = this.transform;
-
-            var ecef_0_0_0 = new UnityEngineDouble.Vector3d(this.transform.position.x, this.transform.position.y, this.transform.position.z);
-            var unity_ecef_0_0_0 = CustomGeo.GeoConverter.ECEFToUnity(ecef_0_0_0, ecef_origin, ecef_origin_rot).Vector3f();
-
-            GameObject center_mass = new GameObject("center_mass");
-            ecef_center_mass_ = center_mass.transform;
-
-            ecef_center_mass_.transform.position = unity_ecef_0_0_0;
-
-            int maxTiles = 1 << zoom;
-            HashSet<(int, int)> uniqueTiles = new HashSet<(int, int)>();
-            for (int x = -blocks; x <= blocks; x++)
+            if (generateTiles)
             {
-                for (int y = -blocks; y <= blocks; y++)
+                tiles = new GameObject("tiles");
+                tiles.transform.parent = this.transform;
+
+                var ecef_0_0_0 = new UnityEngineDouble.Vector3d(this.transform.position.x, this.transform.position.y, this.transform.position.z);
+                var unity_ecef_0_0_0 = CustomGeo.GeoConverter.ECEFToUnity(ecef_0_0_0, ecef_origin, ecef_origin_rot).Vector3f();
+
+                GameObject center_mass = new GameObject("center_mass");
+                ecef_center_mass_ = center_mass.transform;
+
+                ecef_center_mass_.transform.position = unity_ecef_0_0_0;
+
+                int maxTiles = 1 << zoom;
+                HashSet<(int, int)> uniqueTiles = new HashSet<(int, int)>();
+                for (int x = -blocks; x <= blocks; x++)
                 {
-                    int tile_x = tile_main.x + x;
-                    int tile_y = tile_main.y + y;
-
-                    tile_x = ((tile_x % maxTiles) + maxTiles) % maxTiles;
-                    tile_y = ((tile_y % maxTiles) + maxTiles) % maxTiles;
-
-                    if (!uniqueTiles.Add((tile_x, tile_y)))
+                    for (int y = -blocks; y <= blocks; y++)
                     {
-                        continue; // Skip duplicates
+                        int tile_x = tile_main.x + x;
+                        int tile_y = tile_main.y + y;
+
+                        tile_x = ((tile_x % maxTiles) + maxTiles) % maxTiles;
+                        tile_y = ((tile_y % maxTiles) + maxTiles) % maxTiles;
+
+                        if (!uniqueTiles.Add((tile_x, tile_y)))
+                        {
+                            continue; // Skip duplicates
+                        }
+
+                        GameObject tile_object = new GameObject($"{zoom}/{tile_x}/{tile_y}");
+                        tile_object.transform.parent = tiles.transform;
+
+                        TileObjectEpsg4978 tileScript = tile_object.AddComponent<TileObjectEpsg4978>();
+                        tileScript.Initialize(tile_x, tile_y, zoom, this);
                     }
-
-                    GameObject tile_object = new GameObject($"{zoom}/{tile_x}/{tile_y}");
-                    tile_object.transform.parent = tiles.transform;
-
-                    TileObjectEpsg4978 tileScript = tile_object.AddComponent<TileObjectEpsg4978>();
-                    tileScript.Initialize(tile_x, tile_y, zoom, this);
                 }
             }
         }

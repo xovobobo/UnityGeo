@@ -22,20 +22,25 @@ namespace CustomGeo
             );
 
         }
+        /*
+                void Update()
+                {
+                    Vector3 localPos = map.transform.InverseTransformPoint(this.transform.position);
+                    var p = new UnityEngineDouble.Vector3d(
+                        localPos.x,
+                        localPos.y,
+                        localPos.z
+                    );
 
-        void Update()
+                    epsg4978 = ConvertUnityToECEF(p);
+                    epsg4979 = CustomGeo.GeoConverter.epsg4978_to_epsg4979(epsg4978.x, epsg4978.y, epsg4978.z);
+                    // Debug.Log($"LLA: <a href=\"https://maps.google.com/?q={epsg4979.x},{epsg4979.y}&spn\">{epsg4979.x} {epsg4979.y} {epsg4979.z}</a>");
+                }
+        */
+        public UnityEngineDouble.Vector3d GetLLA(double x, double y, double z)
         {
-            Vector3 localPos = map.transform.InverseTransformPoint(this.transform.position);
-            var p = new UnityEngineDouble.Vector3d(
-                localPos.x,
-                localPos.y,
-                localPos.z
-            );
-
-            epsg4978 = ConvertUnityToECEF(p);
-
-            epsg4979 = CustomGeo.GeoConverter.epsg4978_to_epsg4979(epsg4978.x, epsg4978.y, epsg4978.z);
-            Debug.Log($"LLA: <a href=\"https://maps.google.com/?q={epsg4979.x},{epsg4979.y}&spn\">{epsg4979.x} {epsg4979.y} {epsg4979.z}</a>");
+            epsg4978 = ConvertUnityToECEF(new UnityEngineDouble.Vector3d(x, y, z));
+            return CustomGeo.GeoConverter.epsg4978_to_epsg4979(epsg4978.x, epsg4978.y, epsg4978.z);
         }
     }
 }

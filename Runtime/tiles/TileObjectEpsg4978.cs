@@ -17,7 +17,13 @@ namespace CustomGeo
 
             MeshFilter meshFilter = this.gameObject.AddComponent<MeshFilter>();
             MeshRenderer meshRenderer = this.gameObject.AddComponent<MeshRenderer>();
+
+#if UNITY_PIPELINE_HDRP
+   meshRenderer.material = new Material(Shader.Find("HDRP/Lit"));    
+#else
             meshRenderer.material = new Material(Shader.Find("Standard"));
+#endif
+
 
             Mesh mesh = new Mesh();
 
