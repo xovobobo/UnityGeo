@@ -13,16 +13,27 @@ namespace CustomGeo
         [Header("Debug")]
         public UnityEngineDouble.Vector3d ecef_origin;
         public UnityEngineDouble.QuaternionD ecef_origin_rot;
-
         private Transform ecef_center_mass_;
+        private bool inited_ = false;
+
         public void Start()
         {
-            generateBlocks();
+            if (!inited_)
+                GenerateOrigin();
+            if (generateTiles)
+                generateBlocks();
+        }
+
+        public void GenerateOrigin()
+        {
+            UnityEngineDouble.Vector3d epsg4979 = new UnityEngineDouble.Vector3d(LatOrigin, LonOrigin, altOrigin);
+            (ecef_origin, ecef_origin_rot) = GetLocalTangent(epsg4979);
+            inited_ = true;
         }
 
         public void Update()
         {
-            if (udpateGravity)
+            if (udpateGravity && inited_)
             {
                 var direction = ecef_center_mass_.transform.position - looking_tf.transform.position;
                 var gravity = new UnityEngineDouble.Vector3d(direction.x, direction.y, direction.z).normalized * Physics.gravity.magnitude;
@@ -42,12 +53,9 @@ namespace CustomGeo
 
         public override void generateBlocks()
         {
-            UnityEngineDouble.Vector3d epsg4979 = new UnityEngineDouble.Vector3d(LatOrigin, LonOrigin, altOrigin);
-            (ecef_origin, ecef_origin_rot) = GetLocalTangent(epsg4979);
-            CustomGeo.Tile tile_main = new CustomGeo.Tile(lat: LatOrigin, lon: LonOrigin, zoom: zoom);
-
             if (generateTiles)
             {
+                CustomGeo.Tile tile_main = new CustomGeo.Tile(lat: LatOrigin, lon: LonOrigin, zoom: zoom);
                 tiles = new GameObject("tiles");
                 tiles.transform.parent = this.transform;
 
