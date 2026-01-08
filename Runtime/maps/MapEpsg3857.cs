@@ -7,15 +7,10 @@ namespace CustomGeo
         [Header("Debug")]
         public UnityEngineDouble.Vector2d epsg3857_origin;
 
-        public void Start()
+        public override void generateBlocks(int layer)
         {
-            generateBlocks();
-        }
-
-        public override void generateBlocks()
-        {
-            CustomGeo.Tile center_tile = new CustomGeo.Tile(lat: LatOrigin, lon: LonOrigin, zoom: zoom);
-            epsg3857_origin = CustomGeo.GeoConverter.epsg4326_to_epsg3857(LatOrigin, LonOrigin);
+            Tile center_tile = new(lat: LatOrigin, lon: LonOrigin, zoom: zoom);
+            epsg3857_origin = GeoConverter.epsg4326_to_epsg3857(LatOrigin, LonOrigin);
 
             for (int x = -blocks; x <= blocks; x++)
             {
@@ -24,8 +19,10 @@ namespace CustomGeo
                     int tile_x = center_tile.x + x;
                     int tile_y = center_tile.y + y;
 
-                    GameObject tile_object = new GameObject($"{tile_x}/{tile_y}/{zoom}");
-                    TileObjectEpsg3857 tileScript = tile_object.AddComponent<TileObjectEpsg3857>();
+                    GameObject tile_object = new($"{tile_x}/{tile_y}/{zoom}");
+                    tile_object.layer = layer;
+
+                    var tileScript = tile_object.AddComponent<TileObjectEpsg3857>();
                     tileScript.Initialize(tile_x, tile_y, zoom, this);
                 }
             }

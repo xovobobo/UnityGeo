@@ -4,21 +4,30 @@ namespace CustomGeo
 {
     public abstract class MapBase : MonoBehaviour
     {
+        #region Inspector
         public double LatOrigin = 55.75706;
         public double LonOrigin = 48.7572;
-        public string tilemapUrl = "https://127.0.0.1:4444/wmts/google_terrain/base_grid/{z}/{x}/{y}.png ";
 
+        [Header("Tile")]
+        public bool generateTiles = false;
+        public bool store = false;
+        public int tileObjectsLayer = 0;
+        public string tilemapUrl = "http://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+        public string cacheFolder = "";
         [Range(0, 22)]
         public int zoom = 12;
-        public int blocks = 1;
+        public int blocks = 4;
+
+        #endregion
 
         private protected GameObject tiles;
 
-        public abstract void generateBlocks();
+        public abstract void generateBlocks(int layer);
 
         void Start()
         {
-            generateBlocks();
+            if (generateTiles)
+                generateBlocks(tileObjectsLayer);
         }
     }
 }

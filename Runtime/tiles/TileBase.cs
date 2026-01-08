@@ -1,71 +1,175 @@
-using System.Collections;
 using UnityEngine;
 using UnityEngine.Networking;
+
+using System.IO;
+using System.Collections;
 
 namespace CustomGeo
 {
     public abstract class TileBase : MonoBehaviour
     {
-        protected MapBase map_;
-        public int x, y, zoom;
+        protected int x, y, zoom;
+        protected abstract void GenerateTile(MonoBehaviour parent);
 
-        public abstract void GenerateTile(MonoBehaviour parent);
+        private string _url = null;
+        private string _filePath = null;
+        private string _cachePath = null;
+        private bool _saveCache = false;
 
         public void Initialize(int x, int y, int zoom, MonoBehaviour parent)
         {
             this.x = x;
             this.y = y;
             this.zoom = zoom;
-            map_ = parent.GetComponent<MapBase>();
+            var map = parent.GetComponent<MapBase>();
+            if (!map)
+                return;
+
+            _url = map.tilemapUrl.Replace("{z}", zoom.ToString()).Replace("{x}", x.ToString()).Replace("{y}", y.ToString());
+
+            try
+            {
+                if (Directory.Exists(map.cacheFolder))
+                {
+                    _cachePath = map.cacheFolder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.AltDirectorySeparatorChar;
+                    _filePath = _cachePath + $"{zoom}/{x}/{y}.png";
+                    _saveCache = map.store;
+                }
+            }
+            catch { }
+
             GenerateTile(parent);
         }
 
-        public void assignTexture()
+        protected void CreateMesh(Vector3[] vertices)
         {
-            string url = map_.tilemapUrl.Replace("{z}", zoom.ToString())
-                                   .Replace("{x}", x.ToString())
-                                   .Replace("{y}", y.ToString());
+            MeshRenderer meshRenderer = gameObject.AddComponent<MeshRenderer>();
+#if UNITY_PIPELINE_HDRP
+   meshRenderer.material=  new Material(Shader.Find("HDRP/Lit"));    
+#else
+            meshRenderer.material = new Material(Shader.Find("Standard"));
+#endif
+            Mesh mesh = new();
+            MeshFilter meshFilter = gameObject.AddComponent<MeshFilter>();
+            meshFilter.mesh = mesh;
 
-            StartCoroutine(LoadTileTexture(this.gameObject, url, 3));
+            int[] triangles = new int[6]
+            {
+                0, 1, 2,
+                2, 3, 0
+            };
+
+            Vector2[] uv = new Vector2[4]
+            {
+                new (0, 1), new (1, 1),
+                new (1, 0), new (0, 0)
+            };
+
+            mesh.vertices = vertices;
+            mesh.triangles = triangles;
+            mesh.uv = uv;
+            mesh.RecalculateNormals();
+
+            StartCoroutine(LoadTileTexture(gameObject, 3));
         }
 
-        private IEnumerator LoadTileTexture(GameObject tileObject, string url, int maxRetries)
+        private Material CreateTileMaterial(Texture2D texture)
         {
+#if UNITY_PIPELINE_HDRP
+     Material mat = new Material(Shader.Find("HDRP/Lit"))
+#else
+            Material mat = new Material(Shader.Find("Standard"))
+#endif
+            {
+                mainTexture = texture
+            };
+#if UNITY_PIPELINE_HDRP
+                        mat.SetFloat("_Smoothness", 0.0f);
+#endif
+            mat.SetFloat("_Glossiness", 0.0f);
+
+            return mat;
+        }
+
+        private IEnumerator LoadTileTexture(GameObject tileObject, int maxRetries)
+        {
+            // get texture from file
+            if (File.Exists(_filePath))
+            {
+                Texture2D tileTexture = new(2, 2);
+                tileTexture.wrapMode = TextureWrapMode.Clamp;
+                yield return LoadTextureFromFile(_filePath, tileTexture);
+                tileObject.GetComponent<Renderer>().material = CreateTileMaterial(tileTexture);
+                yield break;
+            }
+
+            // get texture from url
             int attempt = 0;
             while (attempt < maxRetries)
             {
-                using (UnityWebRequest uwr = UnityWebRequestTexture.GetTexture(url))
+                using (UnityWebRequest uwr = UnityWebRequestTexture.GetTexture(_url))
                 {
                     yield return uwr.SendWebRequest();
 
                     if (uwr.result == UnityWebRequest.Result.Success)
                     {
                         Texture2D tileTexture = DownloadHandlerTexture.GetContent(uwr);
-#if UNITY_PIPELINE_HDRP
-     Material tileMaterial = new Material(Shader.Find("HDRP/Lit"))
-#else
-                        Material tileMaterial = new Material(Shader.Find("Standard"))
-#endif
+                        if (tileTexture)
                         {
-                            mainTexture = tileTexture
-                        };
-#if UNITY_PIPELINE_HDRP
-                        tileMaterial.SetFloat("_Smoothness", 0.0f);
-#endif
-                        tileMaterial.SetFloat("_Glossiness", 0.0f);
-                        tileObject.GetComponent<Renderer>().material = tileMaterial;
+                            tileTexture.wrapMode = TextureWrapMode.Clamp;
+                            tileObject.GetComponent<Renderer>().material = CreateTileMaterial(tileTexture);
+
+                            if (_saveCache)
+                            {
+                                yield return SaveTextureToFile(_filePath, tileTexture);
+                            }
+                        }
                         yield break;
                     }
                     else
                     {
-                        Debug.LogWarning($"Attempt {attempt + 1} failed to load tile texture from {url}: {uwr.error}");
+                        Debug.LogWarning($"Attempt {attempt + 1} failed to load tile texture from {_url}: {uwr.error}");
                         attempt++;
                         yield return new WaitForSeconds(1);
                     }
                 }
             }
 
-            Debug.LogError($"Failed to load tile texture from {url} after {maxRetries} attempts.");
+            Debug.LogError($"Failed to load tile texture from {_url} after {maxRetries} attempts.");
+        }
+
+        private IEnumerator LoadTextureFromFile(string path, Texture2D texture)
+        {
+            bool success = false;
+            try
+            {
+                byte[] fileData = File.ReadAllBytes(path);
+                success = texture.LoadImage(fileData);
+            }
+            catch { }
+
+            if (!success)
+                Debug.LogWarning($"Can't load texture from file '{path}'.");
+
+            yield return null;
+        }
+
+        private IEnumerator SaveTextureToFile(string path, Texture2D texture)
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(path);
+                if (!Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
+
+                File.WriteAllBytes(path, texture.EncodeToPNG());
+            }
+            catch
+            {
+                Debug.LogWarning($"Can't save texture to file '{path}'.");
+            }
+
+            yield return null;
         }
     }
 }
