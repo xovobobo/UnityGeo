@@ -13,12 +13,11 @@ namespace CustomGeo
         [Header("Debug")]
         public UnityEngineDouble.Vector3d ecef_origin;
         public UnityEngineDouble.QuaternionD ecef_origin_rot;
-
         private Transform ecef_center_mass_;
 
         public void Update()
         {
-            if (udpateGravity)
+            if (udpateGravity && inited_)
             {
                 var direction = ecef_center_mass_.transform.position - looking_tf.transform.position;
                 var gravity = new UnityEngineDouble.Vector3d(direction.x, direction.y, direction.z).normalized * Physics.gravity.magnitude;
