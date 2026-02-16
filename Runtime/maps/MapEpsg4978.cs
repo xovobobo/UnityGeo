@@ -17,7 +17,7 @@ namespace CustomGeo
 
         public void Update()
         {
-            if (udpateGravity && inited_)
+            if (udpateGravity)
             {
                 var direction = ecef_center_mass_.transform.position - looking_tf.transform.position;
                 var gravity = new UnityEngineDouble.Vector3d(direction.x, direction.y, direction.z).normalized * Physics.gravity.magnitude;
