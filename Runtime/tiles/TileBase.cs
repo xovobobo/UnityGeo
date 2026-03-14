@@ -29,9 +29,13 @@ namespace CustomGeo
 
             try
             {
-                if (Directory.Exists(map.cacheFolder))
+                var cacheFolder = map.cacheFolder;
+                if (!Directory.Exists(map.cacheFolder))
+                    cacheFolder = $"{Application.dataPath}/{map.cacheFolder}";
+
+                if (Directory.Exists(cacheFolder))
                 {
-                    _cachePath = map.cacheFolder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.AltDirectorySeparatorChar;
+                    _cachePath = cacheFolder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.AltDirectorySeparatorChar;
                     _filePath = _cachePath + $"{zoom}/{x}/{y}.png";
                     _saveCache = map.store;
                 }
@@ -40,6 +44,8 @@ namespace CustomGeo
 
             GenerateTile(parent);
         }
+
+
 
         protected void CreateMesh(Vector3[] vertices)
         {

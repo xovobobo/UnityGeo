@@ -22,10 +22,12 @@ namespace CustomGeo
 
         private protected GameObject tiles;
 
+        protected abstract void init();
         public abstract void generateBlocks(int layer);
 
-        void Start()
+        void Awake()
         {
+            init();
             if (generateTiles)
                 generateBlocks(tileObjectsLayer);
         }

@@ -10,7 +10,6 @@ namespace CustomGeo
         public override void generateBlocks(int layer)
         {
             Tile center_tile = new(lat: LatOrigin, lon: LonOrigin, zoom: zoom);
-            epsg3857_origin = GeoConverter.epsg4326_to_epsg3857(LatOrigin, LonOrigin);
 
             for (int x = -blocks; x <= blocks; x++)
             {
@@ -26,6 +25,11 @@ namespace CustomGeo
                     tileScript.Initialize(tile_x, tile_y, zoom, this);
                 }
             }
+        }
+
+        protected override void init()
+        {
+            epsg3857_origin = GeoConverter.epsg4326_to_epsg3857(LatOrigin, LonOrigin);
         }
     }
 }

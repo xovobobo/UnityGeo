@@ -17,7 +17,7 @@ namespace CustomGeo
 
         public void Update()
         {
-            if (udpateGravity && inited_)
+            if (udpateGravity)
             {
                 var direction = ecef_center_mass_.transform.position - looking_tf.transform.position;
                 var gravity = new UnityEngineDouble.Vector3d(direction.x, direction.y, direction.z).normalized * Physics.gravity.magnitude;
@@ -37,8 +37,7 @@ namespace CustomGeo
 
         public override void generateBlocks(int layer)
         {
-            UnityEngineDouble.Vector3d epsg4979 = new UnityEngineDouble.Vector3d(LatOrigin, LonOrigin, altOrigin);
-            (ecef_origin, ecef_origin_rot) = GetLocalTangent(epsg4979);
+
             Tile tile_main = new Tile(lat: LatOrigin, lon: LonOrigin, zoom: zoom);
 
             tiles = new GameObject("tiles");
@@ -77,6 +76,12 @@ namespace CustomGeo
                     tileScript.Initialize(tile_x, tile_y, zoom, this);
                 }
             }
+        }
+
+        protected override void init()
+        {
+            UnityEngineDouble.Vector3d epsg4979 = new UnityEngineDouble.Vector3d(LatOrigin, LonOrigin, altOrigin);
+            (ecef_origin, ecef_origin_rot) = GetLocalTangent(epsg4979);
         }
     }
 }
