@@ -3,7 +3,6 @@
 // Assembly location: C:\Program Files (x86)\Unity\Editor\Data\Managed\UnityEngine.dll
 using System;
 using System.Runtime.CompilerServices;
-using Unity.VisualScripting;
 using UnityEngine;
 
 namespace UnityEngineDouble {
