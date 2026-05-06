@@ -2,45 +2,19 @@ using UnityEngine;
 
 namespace CustomGeo
 {
-    public class CoordinateGetter4978 : MonoBehaviour
+    public class CoordinateGetter4978 : CoordinateGetterBase
     {
-        public MapEpsg4978 map;
-
-        [Header("Debug")]
-        public UnityEngineDouble.Vector3d epsg4978;
-        public UnityEngineDouble.Vector3d epsg4979;
-
-
-        private UnityEngineDouble.Vector3d ConvertUnityToECEF(UnityEngineDouble.Vector3d unityPose)
+        public override UnityEngineDouble.Vector3d GetLLA()
         {
-            var position = map.ecef_origin_rot.Inverse() * unityPose;
-
-            return new UnityEngineDouble.Vector3d(
-                map.ecef_origin.x + position.x,
-                map.ecef_origin.y + position.z,
-                map.ecef_origin.z + position.y
-            );
-
+            var map4978 = map as MapEpsg4978;
+            if (map4978 == null) return UnityEngineDouble.Vector3d.zero;
+            return map4978.GetLLAAtPosition(this.transform.position);
         }
-        /*
-                void Update()
-                {
-                    Vector3 localPos = map.transform.InverseTransformPoint(this.transform.position);
-                    var p = new UnityEngineDouble.Vector3d(
-                        localPos.x,
-                        localPos.y,
-                        localPos.z
-                    );
 
-                    epsg4978 = ConvertUnityToECEF(p);
-                    epsg4979 = CustomGeo.GeoConverter.epsg4978_to_epsg4979(epsg4978.x, epsg4978.y, epsg4978.z);
-                    // Debug.Log($"LLA: <a href=\"https://maps.google.com/?q={epsg4979.x},{epsg4979.y}&spn\">{epsg4979.x} {epsg4979.y} {epsg4979.z}</a>");
-                }
-        */
-        public UnityEngineDouble.Vector3d GetLLA(double x, double y, double z)
+        public UnityEngineDouble.Vector3d GetLLAFromUnityPos(Vector3 pos)
         {
-            epsg4978 = ConvertUnityToECEF(new UnityEngineDouble.Vector3d(x, y, z));
-            return CustomGeo.GeoConverter.epsg4978_to_epsg4979(epsg4978.x, epsg4978.y, epsg4978.z);
+            var map4978 = map as MapEpsg4978;
+            return map4978 != null ? map4978.GetLLAAtPosition(pos) : UnityEngineDouble.Vector3d.zero;
         }
     }
 }
