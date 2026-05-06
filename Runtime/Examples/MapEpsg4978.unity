@@ -339,11 +339,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   LatOrigin: 55.7571
   LonOrigin: 48.75683
+  generateTiles: 1
+  udpateDynamicTiles: 1
+  looking_tf: {fileID: 1274341485}
+  tileObjectsLayer: 0
   tilemapUrl: https://mt0.google.com/vt/lyrs=s@0&hl=en&x={x}&y={y}&z={z}
   zoom: 19
   blocks: 3
-  altOrigin: 0
-  looking_tf: {fileID: 0}
+  cacheFolder: 
+  store: 0
+  altOrigin: 220
   udpateGravity: 0
   ecef_origin:
     x: 0
@@ -414,11 +419,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   map: {fileID: 604747672}
-  epsg4978:
-    x: 0
-    y: 0
-    z: 0
-  epsg4979:
+  autoUpdate: 0
+  lla:
     x: 0
     y: 0
     z: 0

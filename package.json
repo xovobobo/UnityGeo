@@ -1,6 +1,6 @@
 {
   "name": "com.ars.customgeo",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "displayName": "Custom Geo Framework",
   "description": "Package designed for seamless conversion between various coordinate systems and visualization of tile-based maps",
   "unity": "2020.3",

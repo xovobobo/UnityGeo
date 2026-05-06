@@ -1,13 +1,11 @@
 using UnityEngine;
-using System.Collections.Generic;
 
 namespace CustomGeo
 {
     public class MapEpsg4978 : MapBase
     {
-        [Header("Epsg4978 ")]
+        [Header("Epsg4978 Specific")]
         public double altOrigin = 0;
-        public Transform looking_tf;
         public bool udpateGravity = false;
 
         [Header("Debug")]
@@ -15,73 +13,54 @@ namespace CustomGeo
         public UnityEngineDouble.QuaternionD ecef_origin_rot;
         private Transform ecef_center_mass_;
 
-        public void Update()
+        protected override void Update()
         {
-            if (udpateGravity)
+            base.Update();
+            if (udpateGravity && looking_tf != null && ecef_center_mass_ != null)
             {
-                var direction = ecef_center_mass_.transform.position - looking_tf.transform.position;
-                var gravity = new UnityEngineDouble.Vector3d(direction.x, direction.y, direction.z).normalized * Physics.gravity.magnitude;
-                Physics.gravity = gravity.Vector3f();
+                var direction = ecef_center_mass_.position - looking_tf.position;
+                Physics.gravity = direction.normalized * 9.81f;
             }
         }
 
-        public (UnityEngineDouble.Vector3d ecef_pose_origin, UnityEngineDouble.QuaternionD ecef_rot_origin) GetLocalTangent(UnityEngineDouble.Vector3d lla)
+        public override UnityEngineDouble.Vector3d GetLLAAtPosition(Vector3 worldPos)
         {
-            var yaw = UnityEngineDouble.QuaternionD.AngleAxis(90 + lla.y, UnityEngineDouble.Vector3d.up);
-            var pitch = UnityEngineDouble.QuaternionD.AngleAxis(90 - lla.x, UnityEngineDouble.Vector3d.right);
-            return (
-                GeoConverter.epsg4979_to_epsg4978(lla.x, lla.y, lla.z),
-                pitch * yaw
+            var localPos = transform.InverseTransformPoint(worldPos);
+            var p = new UnityEngineDouble.Vector3d(localPos.x, localPos.y, localPos.z);
+            var position = ecef_origin_rot.Inverse() * p;
+
+            var ecef = new UnityEngineDouble.Vector3d(
+                ecef_origin.x + position.x,
+                ecef_origin.y + position.z,
+                ecef_origin.z + position.y
             );
+            return GeoConverter.epsg4978_to_epsg4979(ecef.x, ecef.y, ecef.z);
         }
 
-        public override void generateBlocks(int layer)
+        public override void SpawnTile(int tx, int ty, int z)
         {
+            GameObject tile_obj = new GameObject($"Tile_{z}_{tx}_{ty}");
+            tile_obj.transform.parent = tiles.transform;
+            tile_obj.layer = tileObjectsLayer;
 
-            Tile tile_main = new Tile(lat: LatOrigin, lon: LonOrigin, zoom: zoom);
-
-            tiles = new GameObject("tiles");
-            tiles.transform.parent = transform;
-
-            var ecef_0_0_0 = new UnityEngineDouble.Vector3d(transform.position.x, transform.position.y, transform.position.z);
-            var unity_ecef_0_0_0 = GeoConverter.ECEFToUnity(ecef_0_0_0, ecef_origin, ecef_origin_rot).Vector3f();
-
-            GameObject center_mass = new GameObject("center_mass");
-            ecef_center_mass_ = center_mass.transform;
-
-            ecef_center_mass_.transform.position = unity_ecef_0_0_0;
-
-            int maxTiles = 1 << zoom;
-            HashSet<(int, int)> uniqueTiles = new HashSet<(int, int)>();
-            for (int x = -blocks; x <= blocks; x++)
-            {
-                for (int y = -blocks; y <= blocks; y++)
-                {
-                    int tile_x = tile_main.x + x;
-                    int tile_y = tile_main.y + y;
-
-                    tile_x = ((tile_x % maxTiles) + maxTiles) % maxTiles;
-                    tile_y = ((tile_y % maxTiles) + maxTiles) % maxTiles;
-
-                    if (!uniqueTiles.Add((tile_x, tile_y)))
-                    {
-                        continue; // Skip duplicates
-                    }
-
-                    GameObject tile_object = new GameObject($"{zoom}/{tile_x}/{tile_y}");
-                    tile_object.transform.parent = tiles.transform;
-                    tile_object.layer = layer;
-
-                    TileObjectEpsg4978 tileScript = tile_object.AddComponent<TileObjectEpsg4978>();
-                    tileScript.Initialize(tile_x, tile_y, zoom, this);
-                }
-            }
+            var tileScript = tile_obj.AddComponent<TileObjectEpsg4978>();
+            tileScript.Initialize(tx, ty, z, this);
+            activeTiles.Add((z, tx, ty), tileScript);
         }
 
         protected override void init()
         {
-            UnityEngineDouble.Vector3d epsg4979 = new UnityEngineDouble.Vector3d(LatOrigin, LonOrigin, altOrigin);
-            (ecef_origin, ecef_origin_rot) = GetLocalTangent(epsg4979);
+            UnityEngineDouble.Vector3d lla = new(LatOrigin, LonOrigin, altOrigin);
+
+            var yaw = UnityEngineDouble.QuaternionD.AngleAxis(90 + lla.y, UnityEngineDouble.Vector3d.up);
+            var pitch = UnityEngineDouble.QuaternionD.AngleAxis(90 - lla.x, UnityEngineDouble.Vector3d.right);
+            ecef_origin = GeoConverter.epsg4979_to_epsg4978(lla.x, lla.y, lla.z);
+            ecef_origin_rot = pitch * yaw;
+
+            var unity_ecef_zero = GeoConverter.ECEFToUnity(new UnityEngineDouble.Vector3d(0,0,0), ecef_origin, ecef_origin_rot).Vector3f();
+            ecef_center_mass_ = new GameObject("center_mass").transform;
+            ecef_center_mass_.position = unity_ecef_zero;
+            ecef_center_mass_.parent = transform;
         }
     }
 }

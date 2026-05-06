@@ -2,27 +2,14 @@ using UnityEngine;
 
 namespace CustomGeo
 {
-    public class CoordinateGetterEpsg3857 : MonoBehaviour
+    public class CoordinateGetterEpsg3857 : CoordinateGetterBase
     {
-        public MapEpsg3857 map;
-
-        [Header("Debug")]
-        public UnityEngineDouble.Vector2d espg3857;
-        public UnityEngineDouble.Vector2d espg4326;
-
-
-        void Update()
+        public override UnityEngineDouble.Vector3d GetLLA()
         {
-            Vector3 localPos = map.transform.InverseTransformPoint(this.transform.position);
-            var p = new UnityEngineDouble.Vector2d(
-                localPos.x,
-                localPos.z
-            );
+            var map3857 = map as MapEpsg3857;
+            if (map3857 == null) return UnityEngineDouble.Vector3d.zero;
 
-            espg3857 = map.epsg3857_origin + p;
-
-            espg4326 = CustomGeo.GeoConverter.epsg3857_to_epsg4326(espg3857);
-            Debug.Log($"LLA: <a href=\"https://maps.google.com/?q={espg4326.x},{espg4326.y}&spn\">{espg4326.x} {espg4326.y}</a>");
+            return map3857.GetLLAAtPosition(this.transform.position);
         }
     }
 }
