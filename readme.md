@@ -2,8 +2,7 @@
 
 - [Usage](#usage)
 - [Installation](#installation)
-  - [1. Install High Precision Framework](#1-install-high-precision-framework)
-  - [2. Install Custom Geo](#2-install-custom-geo)
+  - [1. Install Custom Geo](#1-install-custom-geo)
 
 ## Usage
 - Open the `Packages` folder and navigate to `Custom Geo Framework`
