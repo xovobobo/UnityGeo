@@ -349,6 +349,7 @@ MonoBehaviour:
   blocks: 3
   cacheFolder: 
   store: 0
+  cacheGameobjects: 1
   altOrigin: 220
   udpateGravity: 0
   ecef_origin:
