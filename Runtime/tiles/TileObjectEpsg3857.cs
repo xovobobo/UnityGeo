@@ -12,7 +12,6 @@ namespace CustomGeo
 
             transform.localPosition = new Vector3(parent.transform.localPosition.x, 0, parent.transform.localPosition.z);
             transform.localRotation = Quaternion.Euler(0, -180, 0);
-            transform.parent = parent.transform;
 
             Tile tile = new(x, y, zoom);
             var bounds = tile.boundsEpsg3857();

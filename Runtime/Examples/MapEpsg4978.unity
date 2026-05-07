@@ -208,11 +208,11 @@ Transform:
   m_GameObject: {fileID: 207269992}
   serializedVersion: 2
   m_LocalRotation: {x: 0.15420291, y: -0, z: -0, w: 0.9880392}
-  m_LocalPosition: {x: -7.4800034, y: 4.69, z: 9.430002}
+  m_LocalPosition: {x: 0, y: 3.5, z: -7.16}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 604747674}
+  m_Father: {fileID: 1274341485}
   m_LocalEulerAnglesHint: {x: 17.741, y: -90, z: 0}
 --- !u!1 &295831840
 GameObject:
@@ -337,6 +337,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 25fff68ccb329e6d782da1e8cc23b5c4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  autoInit: 1
   LatOrigin: 55.7571
   LonOrigin: 48.75683
   generateTiles: 1
@@ -348,6 +349,7 @@ MonoBehaviour:
   blocks: 3
   cacheFolder: 
   store: 0
+  cacheGameobjects: 1
   altOrigin: 220
   udpateGravity: 0
   ecef_origin:
@@ -367,7 +369,6 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 207269995}
   - {fileID: 1274341485}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -403,7 +404,8 @@ Transform:
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 207269995}
   m_Father: {fileID: 604747674}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1274341486
@@ -419,7 +421,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   map: {fileID: 604747672}
-  autoUpdate: 0
+  autoUpdate: 1
   lla:
     x: 0
     y: 0

@@ -39,13 +39,18 @@ namespace CustomGeo
 
         public override void SpawnTile(int tx, int ty, int z)
         {
-            GameObject tile_obj = new GameObject($"Tile_{z}_{tx}_{ty}");
-            tile_obj.transform.parent = tiles.transform;
+            var key = (z, tx, ty);
+            if (activeTiles.ContainsKey(key)) return;
+
+            Transform parentFolder = GetTileParent(z, tx);
+
+            GameObject tile_obj = new GameObject($"{ty}");
+            tile_obj.transform.parent = parentFolder;
             tile_obj.layer = tileObjectsLayer;
 
             var tileScript = tile_obj.AddComponent<TileObjectEpsg4978>();
             tileScript.Initialize(tx, ty, z, this);
-            activeTiles.Add((z, tx, ty), tileScript);
+            activeTiles.Add(key, tileScript);
         }
 
         protected override void init()
@@ -57,10 +62,25 @@ namespace CustomGeo
             ecef_origin = GeoConverter.epsg4979_to_epsg4978(lla.x, lla.y, lla.z);
             ecef_origin_rot = pitch * yaw;
 
-            var unity_ecef_zero = GeoConverter.ECEFToUnity(new UnityEngineDouble.Vector3d(0,0,0), ecef_origin, ecef_origin_rot).Vector3f();
+            var unity_ecef_zero = GeoConverter.ECEFToUnity(new UnityEngineDouble.Vector3d(0, 0, 0), ecef_origin, ecef_origin_rot).Vector3f();
             ecef_center_mass_ = new GameObject("center_mass").transform;
             ecef_center_mass_.position = unity_ecef_zero;
             ecef_center_mass_.parent = transform;
+        }
+
+        public override Vector3 GetWorldPositionFromLLA(UnityEngineDouble.Vector3d lla)
+        {
+            UnityEngineDouble.Vector3d targetEcef = GeoConverter.epsg4979_to_epsg4978(lla.x, lla.y, lla.z);
+            double posX = targetEcef.x - ecef_origin.x;
+            double posZ = targetEcef.y - ecef_origin.y;
+            double posY = targetEcef.z - ecef_origin.z;
+
+            UnityEngineDouble.Vector3d position = new UnityEngineDouble.Vector3d(posX, posY, posZ);
+
+            UnityEngineDouble.Vector3d localPosDouble = ecef_origin_rot * position;
+
+            Vector3 localPos = new Vector3((float)localPosDouble.x, (float)localPosDouble.y, (float)localPosDouble.z);
+            return transform.TransformPoint(localPos);
         }
     }
 }
