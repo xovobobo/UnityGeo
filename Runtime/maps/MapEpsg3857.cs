@@ -27,13 +27,25 @@ namespace CustomGeo
             var key = (z, tx, ty);
             if (activeTiles.ContainsKey(key)) return;
 
-            GameObject tile_obj = new GameObject($"Tile_{z}_{tx}_{ty}");
-            tile_obj.transform.parent = tiles.transform;
+            Transform parentFolder = GetTileParent(z, tx);
+
+            GameObject tile_obj = new GameObject($"{ty}");
+            tile_obj.transform.parent = parentFolder;
             tile_obj.layer = tileObjectsLayer;
 
             var tileScript = tile_obj.AddComponent<TileObjectEpsg3857>();
             tileScript.Initialize(tx, ty, z, this);
             activeTiles.Add(key, tileScript);
         }
+
+        public override Vector3 GetWorldPositionFromLLA(UnityEngineDouble.Vector3d lla)
+        {
+            UnityEngineDouble.Vector2d target3857 = GeoConverter.epsg4326_to_epsg3857(lla.x, lla.y);
+            double offsetX = target3857.x - epsg3857_origin.x;
+            double offsetZ = target3857.y - epsg3857_origin.y;
+            Vector3 localPos = new Vector3((float)offsetX, (float)lla.z, (float)offsetZ);
+            return transform.TransformPoint(localPos);
+        }
+
     }
 }

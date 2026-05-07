@@ -20,5 +20,13 @@ namespace CustomGeo
         }
 
         public abstract UnityEngineDouble.Vector3d GetLLA();
+
+        [ContextMenu("Open in Google Maps")]
+        public void OpenInGoogleMaps()
+        {
+            var currentLla = GetLLA();
+            string url = $"https://maps.google.com/?q={currentLla.x},{currentLla.y}";
+            Application.OpenURL(url);
+        }
     }
 }
