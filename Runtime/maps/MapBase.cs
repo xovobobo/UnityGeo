@@ -26,6 +26,9 @@ namespace CustomGeo
         public string cacheFolder = "";
         public bool store = false;
         public bool cacheGameobjects = false;
+
+        public Material tilesMaterial;
+        public bool addTilesCollider = false;
         #endregion
 
         private protected GameObject tiles;

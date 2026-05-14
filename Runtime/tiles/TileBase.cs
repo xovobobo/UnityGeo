@@ -11,6 +11,7 @@ namespace CustomGeo
         protected int x, y, zoom;
         protected abstract void GenerateTile(MonoBehaviour parent);
 
+        private MapBase map;
         private string _url = null;
         private string _filePath = null;
         private string _cachePath = null;
@@ -21,7 +22,7 @@ namespace CustomGeo
             this.x = x;
             this.y = y;
             this.zoom = zoom;
-            var map = parent.GetComponent<MapBase>();
+            map = parent.GetComponent<MapBase>();
             if (!map)
                 return;
 
@@ -50,11 +51,7 @@ namespace CustomGeo
         protected void CreateMesh(Vector3[] vertices)
         {
             MeshRenderer meshRenderer = gameObject.AddComponent<MeshRenderer>();
-#if UNITY_PIPELINE_HDRP
-   meshRenderer.material=  new Material(Shader.Find("HDRP/Lit"));    
-#else
-            meshRenderer.material = new Material(Shader.Find("Standard"));
-#endif
+            meshRenderer.material = new Material(map.tilesMaterial);
             Mesh mesh = new();
             MeshFilter meshFilter = gameObject.AddComponent<MeshFilter>();
             meshFilter.mesh = mesh;
@@ -71,29 +68,27 @@ namespace CustomGeo
                 new (1, 0), new (0, 0)
             };
 
+
             mesh.vertices = vertices;
             mesh.triangles = triangles;
             mesh.uv = uv;
             mesh.RecalculateNormals();
+
+            if (map.addTilesCollider)
+            {
+                MeshCollider meshCollider = gameObject.AddComponent<MeshCollider>();
+                meshCollider.sharedMesh = mesh;
+            }
 
             StartCoroutine(LoadTileTexture(gameObject, 3));
         }
 
         private Material CreateTileMaterial(Texture2D texture)
         {
-#if UNITY_PIPELINE_HDRP
-     Material mat = new Material(Shader.Find("HDRP/Lit"))
-#else
-            Material mat = new Material(Shader.Find("Standard"))
-#endif
+            Material mat = new Material(map.tilesMaterial)
             {
                 mainTexture = texture
             };
-#if UNITY_PIPELINE_HDRP
-                        mat.SetFloat("_Smoothness", 0.0f);
-#endif
-            mat.SetFloat("_Glossiness", 0.0f);
-
             return mat;
         }
 
