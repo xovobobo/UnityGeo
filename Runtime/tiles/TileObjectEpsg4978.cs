@@ -10,17 +10,18 @@ namespace CustomGeo
             if (!map)
                 return;
 
-            transform.localPosition = new Vector3(map.transform.position.x, map.transform.position.y, map.transform.position.z);
+            transform.localPosition = Vector3.zero;
             transform.localRotation = Quaternion.identity;
 
             var tile = new Tile(x, y, zoom);
             var bounds = tile.boundsEpsg4978_2(map.altOrigin);
+            var (origin, rot) = map.GetOriginEcef();
             CreateMesh(
                 new Vector3[4] {
-                    GeoConverter.ECEFToUnity(bounds.Topleft, map.ecef_origin, map.ecef_origin_rot).Vector3f(),
-                    GeoConverter.ECEFToUnity(bounds.Topright, map.ecef_origin, map.ecef_origin_rot).Vector3f(),
-                    GeoConverter.ECEFToUnity(bounds.Bottom_right, map.ecef_origin, map.ecef_origin_rot).Vector3f(),
-                    GeoConverter.ECEFToUnity(bounds.Bottom_left, map.ecef_origin, map.ecef_origin_rot).Vector3f()
+                    GeoConverter.ECEFToUnity(bounds.Topleft, origin, rot).Vector3f(),
+                    GeoConverter.ECEFToUnity(bounds.Topright, origin, rot).Vector3f(),
+                    GeoConverter.ECEFToUnity(bounds.Bottom_right, origin, rot).Vector3f(),
+                    GeoConverter.ECEFToUnity(bounds.Bottom_left, origin, rot).Vector3f()
                 }
             );
         }

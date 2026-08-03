@@ -6,6 +6,9 @@ namespace CustomGeo
 {
     public abstract class MapBase : MonoBehaviour
     {
+        private readonly object _stateLock = new object();
+        protected object StateLock => _stateLock;
+
         #region Inspector
         [Header("Initialization")]
         public bool autoInit = true;
@@ -51,19 +54,46 @@ namespace CustomGeo
 
         public void InitMap()
         {
-            ClearTiles();
+            lock (_stateLock)
+            {
+                ClearTilesLocked();
 
-            init();
-            SetupTilesContainer();
+                init();
+                SetupTilesContainer();
 
-            if (generateTiles)
-                generateBlocksStatic();
+                if (generateTiles)
+                    generateBlocksStaticLocked();
 
-            IsInitialized = true;
+                IsInitialized = true;
+            }
+        }
+
+        public void Reinitialize(double? latOrigin = null, double? lonOrigin = null)
+        {
+            lock (_stateLock)
+            {
+                if (latOrigin.HasValue) LatOrigin = latOrigin.Value;
+                if (lonOrigin.HasValue) LonOrigin = lonOrigin.Value;
+
+                ClearTilesLocked();
+                init();
+                SetupTilesContainer();
+                if (generateTiles)
+                    generateBlocksStaticLocked();
+                IsInitialized = true;
+            }
         }
 
 
         public void ClearTiles()
+        {
+            lock (_stateLock)
+            {
+                ClearTilesLocked();
+            }
+        }
+
+        private void ClearTilesLocked()
         {
             foreach (var tile in activeTiles.Values)
             {
@@ -73,8 +103,8 @@ namespace CustomGeo
 
             if (tiles != null)
             {
-                foreach (Transform child in tiles.transform)
-                    Destroy(child.gameObject);
+                Destroy(tiles);
+                tiles = null;
             }
 
             IsInitialized = false;
@@ -94,10 +124,16 @@ namespace CustomGeo
         protected virtual void Update()
         {
             if (IsInitialized && udpateDynamicTiles && looking_tf != null)
-                UpdateDynamicTilesLogic();
+            {
+                lock (_stateLock)
+                {
+                    if (IsInitialized)
+                        UpdateDynamicTilesLogicLocked();
+                }
+            }
         }
 
-        private void UpdateDynamicTilesLogic()
+        private void UpdateDynamicTilesLogicLocked()
         {
             var lla = GetLLAAtPosition(looking_tf.position);
             Tile tile_center = new Tile(lat: lla.x, lon: lla.y, zoom: zoom);
@@ -170,7 +206,7 @@ namespace CustomGeo
 
 
 
-        private void generateBlocksStatic()
+        private void generateBlocksStaticLocked()
         {
             Tile tile_center = new Tile(LatOrigin, LonOrigin, zoom);
             for (int x = -blocks; x <= blocks; x++)
