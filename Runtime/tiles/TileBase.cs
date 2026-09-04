@@ -17,6 +17,12 @@ namespace CustomGeo
         private string _cachePath = null;
         private bool _saveCache = false;
 
+        private Texture2D _tileTexture;
+        private Material _tileMaterial;
+        private Mesh _tileMesh;
+        private Coroutine _loadCoroutine;
+        private UnityWebRequest _activeRequest;
+
         public void Initialize(int x, int y, int zoom, MonoBehaviour parent)
         {
             this.x = x;
@@ -46,15 +52,13 @@ namespace CustomGeo
             GenerateTile(parent);
         }
 
-
-
         protected void CreateMesh(Vector3[] vertices)
         {
             MeshRenderer meshRenderer = gameObject.AddComponent<MeshRenderer>();
-            meshRenderer.material = new Material(map.tilesMaterial);
-            Mesh mesh = new();
             MeshFilter meshFilter = gameObject.AddComponent<MeshFilter>();
-            meshFilter.mesh = mesh;
+
+            _tileMesh = new Mesh { name = $"Tile_{zoom}_{x}_{y}" };
+            meshFilter.sharedMesh = _tileMesh;
 
             int[] triangles = new int[6]
             {
@@ -68,19 +72,22 @@ namespace CustomGeo
                 new (1, 0), new (0, 0)
             };
 
-
-            mesh.vertices = vertices;
-            mesh.triangles = triangles;
-            mesh.uv = uv;
-            mesh.RecalculateNormals();
+            _tileMesh.vertices = vertices;
+            _tileMesh.triangles = triangles;
+            _tileMesh.uv = uv;
+            _tileMesh.RecalculateNormals();
 
             if (map.addTilesCollider)
             {
                 MeshCollider meshCollider = gameObject.AddComponent<MeshCollider>();
-                meshCollider.sharedMesh = mesh;
+                meshCollider.sharedMesh = _tileMesh;
             }
 
-            StartCoroutine(LoadTileTexture(gameObject, 3));
+            // Assign a temporary shared material so the renderer is valid;
+            // the owned instance is created once the texture finishes loading.
+            meshRenderer.sharedMaterial = map.tilesMaterial;
+
+            _loadCoroutine = StartCoroutine(LoadTileTexture(meshRenderer, 3));
         }
 
         private Material CreateTileMaterial(Texture2D texture)
@@ -92,15 +99,38 @@ namespace CustomGeo
             return mat;
         }
 
-        private IEnumerator LoadTileTexture(GameObject tileObject, int maxRetries)
+        private void AssignTileTexture(MeshRenderer renderer, Texture2D texture)
+        {
+            if (renderer == null || texture == null)
+            {
+                if (texture != null)
+                    Destroy(texture);
+                return;
+            }
+
+            ReleaseOwnedResources(releaseMesh: false);
+
+            _tileTexture = texture;
+            _tileMaterial = CreateTileMaterial(texture);
+            renderer.sharedMaterial = _tileMaterial;
+        }
+
+        private IEnumerator LoadTileTexture(MeshRenderer renderer, int maxRetries)
         {
             // get texture from file
-            if (File.Exists(_filePath))
+            if (!string.IsNullOrEmpty(_filePath) && File.Exists(_filePath))
             {
                 Texture2D tileTexture = new(2, 2);
                 tileTexture.wrapMode = TextureWrapMode.Clamp;
                 yield return LoadTextureFromFile(_filePath, tileTexture);
-                tileObject.GetComponent<Renderer>().material = CreateTileMaterial(tileTexture);
+
+                if (this == null || renderer == null)
+                {
+                    Destroy(tileTexture);
+                    yield break;
+                }
+
+                AssignTileTexture(renderer, tileTexture);
                 yield break;
             }
 
@@ -108,32 +138,64 @@ namespace CustomGeo
             int attempt = 0;
             while (attempt < maxRetries)
             {
-                using (UnityWebRequest uwr = UnityWebRequestTexture.GetTexture(_url))
+                if (this == null)
+                    yield break;
+
+                _activeRequest = UnityWebRequestTexture.GetTexture(_url);
+                yield return _activeRequest.SendWebRequest();
+
+                // StopCoroutine skips iterator finally/using — request lives in _activeRequest
+                // until we clear it here, or OnDestroy calls DisposeActiveRequest().
+                var uwr = _activeRequest;
+                _activeRequest = null;
+
+                if (uwr == null)
+                    yield break;
+
+                Texture2D tileTexture = null;
+                string error = null;
+                bool success = false;
+
+                // No yield inside try/finally: Dispose must run even if coroutine is stopped later.
+                try
                 {
-                    yield return uwr.SendWebRequest();
-
-                    if (uwr.result == UnityWebRequest.Result.Success)
+                    if (this != null && renderer != null &&
+                        uwr.result == UnityWebRequest.Result.Success)
                     {
-                        Texture2D tileTexture = DownloadHandlerTexture.GetContent(uwr);
-                        if (tileTexture)
-                        {
-                            tileTexture.wrapMode = TextureWrapMode.Clamp;
-                            tileObject.GetComponent<Renderer>().material = CreateTileMaterial(tileTexture);
-
-                            if (_saveCache)
-                            {
-                                yield return SaveTextureToFile(_filePath, tileTexture);
-                            }
-                        }
-                        yield break;
+                        tileTexture = DownloadHandlerTexture.GetContent(uwr);
+                        success = tileTexture != null;
                     }
-                    else
+                    else if (uwr.result != UnityWebRequest.Result.Success)
                     {
-                        Debug.LogWarning($"Attempt {attempt + 1} failed to load tile texture from {_url}: {uwr.error}");
-                        attempt++;
-                        yield return new WaitForSeconds(1);
+                        error = uwr.error;
                     }
                 }
+                finally
+                {
+                    uwr.Dispose();
+                }
+
+                if (this == null || renderer == null)
+                {
+                    if (tileTexture != null)
+                        Destroy(tileTexture);
+                    yield break;
+                }
+
+                if (success)
+                {
+                    tileTexture.wrapMode = TextureWrapMode.Clamp;
+                    AssignTileTexture(renderer, tileTexture);
+
+                    if (_saveCache && !string.IsNullOrEmpty(_filePath))
+                        yield return SaveTextureToFile(_filePath, tileTexture);
+
+                    yield break;
+                }
+
+                Debug.LogWarning($"Attempt {attempt + 1} failed to load tile texture from {_url}: {error}");
+                attempt++;
+                yield return new WaitForSeconds(1);
             }
 
             Debug.LogError($"Failed to load tile texture from {_url} after {maxRetries} attempts.");
@@ -171,6 +233,53 @@ namespace CustomGeo
             }
 
             yield return null;
+        }
+
+        private void DisposeActiveRequest()
+        {
+            if (_activeRequest == null)
+                return;
+
+            // Abort in-flight download so native buffers are released promptly.
+            if (!_activeRequest.isDone)
+                _activeRequest.Abort();
+
+            _activeRequest.Dispose();
+            _activeRequest = null;
+        }
+
+        private void ReleaseOwnedResources(bool releaseMesh)
+        {
+            if (_tileMaterial != null)
+            {
+                Destroy(_tileMaterial);
+                _tileMaterial = null;
+            }
+
+            if (_tileTexture != null)
+            {
+                Destroy(_tileTexture);
+                _tileTexture = null;
+            }
+
+            if (releaseMesh && _tileMesh != null)
+            {
+                Destroy(_tileMesh);
+                _tileMesh = null;
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (_loadCoroutine != null)
+            {
+                StopCoroutine(_loadCoroutine);
+                _loadCoroutine = null;
+            }
+
+            // Must dispose explicitly: StopCoroutine does not run iterator finally/using.
+            DisposeActiveRequest();
+            ReleaseOwnedResources(releaseMesh: true);
         }
     }
 }
