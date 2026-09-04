@@ -1,13 +1,22 @@
 using UnityEngine;
 using UnityEngine.Networking;
 
+using System;
 using System.IO;
 using System.Collections;
+using System.Threading.Tasks;
 
 namespace CustomGeo
 {
     public abstract class TileBase : MonoBehaviour
     {
+        private const int MaxTextureOpsPerFrame = 2;
+        private const int MaxConcurrentDownloads = 6;
+
+        private static int _textureOpsFrame = -1;
+        private static int _textureOpsThisFrame;
+        private static int _activeDownloads;
+
         protected int x, y, zoom;
         protected abstract void GenerateTile(MonoBehaviour parent);
 
@@ -22,6 +31,7 @@ namespace CustomGeo
         private Mesh _tileMesh;
         private Coroutine _loadCoroutine;
         private UnityWebRequest _activeRequest;
+        private bool _holdsDownloadSlot;
 
         public void Initialize(int x, int y, int zoom, MonoBehaviour parent)
         {
@@ -115,23 +125,77 @@ namespace CustomGeo
             renderer.sharedMaterial = _tileMaterial;
         }
 
-        private IEnumerator LoadTileTexture(MeshRenderer renderer, int maxRetries)
+        private static IEnumerator WaitForTextureOpSlot()
         {
-            // get texture from file
-            if (!string.IsNullOrEmpty(_filePath) && File.Exists(_filePath))
+            while (true)
             {
-                Texture2D tileTexture = new(2, 2);
-                tileTexture.wrapMode = TextureWrapMode.Clamp;
-                yield return LoadTextureFromFile(_filePath, tileTexture);
-
-                if (this == null || renderer == null)
+                int frame = Time.frameCount;
+                if (_textureOpsFrame != frame)
                 {
-                    Destroy(tileTexture);
+                    _textureOpsFrame = frame;
+                    _textureOpsThisFrame = 0;
+                }
+
+                if (_textureOpsThisFrame < MaxTextureOpsPerFrame)
+                {
+                    _textureOpsThisFrame++;
                     yield break;
                 }
 
-                AssignTileTexture(renderer, tileTexture);
+                yield return null;
+            }
+        }
+
+        private IEnumerator AcquireDownloadSlot()
+        {
+            while (_activeDownloads >= MaxConcurrentDownloads)
+                yield return null;
+
+            _activeDownloads++;
+            _holdsDownloadSlot = true;
+        }
+
+        private void ReleaseDownloadSlot()
+        {
+            if (!_holdsDownloadSlot)
+                return;
+
+            _holdsDownloadSlot = false;
+            _activeDownloads = Math.Max(0, _activeDownloads - 1);
+        }
+
+        private IEnumerator LoadTileTexture(MeshRenderer renderer, int maxRetries)
+        {
+            // Spread work across frames: Update may spawn hundreds of tiles at once.
+            yield return null;
+
+            if (this == null || renderer == null)
                 yield break;
+
+            // Prefer disk cache. Existence check runs off the main thread.
+            if (!string.IsNullOrEmpty(_filePath))
+            {
+                bool fileExists = false;
+                yield return RunOffMainThread(() => fileExists = File.Exists(_filePath));
+
+                if (this == null || renderer == null)
+                    yield break;
+
+                if (fileExists)
+                {
+                    Texture2D tileTexture = new(2, 2);
+                    tileTexture.wrapMode = TextureWrapMode.Clamp;
+                    yield return LoadTextureFromFileAsync(_filePath, tileTexture);
+
+                    if (this == null || renderer == null)
+                    {
+                        Destroy(tileTexture);
+                        yield break;
+                    }
+
+                    AssignTileTexture(renderer, tileTexture);
+                    yield break;
+                }
             }
 
             // get texture from url
@@ -141,6 +205,13 @@ namespace CustomGeo
                 if (this == null)
                     yield break;
 
+                yield return AcquireDownloadSlot();
+                if (this == null)
+                {
+                    ReleaseDownloadSlot();
+                    yield break;
+                }
+
                 _activeRequest = UnityWebRequestTexture.GetTexture(_url);
                 yield return _activeRequest.SendWebRequest();
 
@@ -148,6 +219,7 @@ namespace CustomGeo
                 // until we clear it here, or OnDestroy calls DisposeActiveRequest().
                 var uwr = _activeRequest;
                 _activeRequest = null;
+                ReleaseDownloadSlot();
 
                 if (uwr == null)
                     yield break;
@@ -188,7 +260,7 @@ namespace CustomGeo
                     AssignTileTexture(renderer, tileTexture);
 
                     if (_saveCache && !string.IsNullOrEmpty(_filePath))
-                        yield return SaveTextureToFile(_filePath, tileTexture);
+                        yield return SaveTextureToFileAsync(_filePath, tileTexture);
 
                     yield break;
                 }
@@ -201,38 +273,97 @@ namespace CustomGeo
             Debug.LogError($"Failed to load tile texture from {_url} after {maxRetries} attempts.");
         }
 
-        private IEnumerator LoadTextureFromFile(string path, Texture2D texture)
+        private static IEnumerator RunOffMainThread(Action action)
         {
-            bool success = false;
-            try
+            Exception error = null;
+            var task = Task.Run(() =>
             {
-                byte[] fileData = File.ReadAllBytes(path);
-                success = texture.LoadImage(fileData);
-            }
-            catch { }
+                try
+                {
+                    action();
+                }
+                catch (Exception e)
+                {
+                    error = e;
+                }
+            });
 
-            if (!success)
-                Debug.LogWarning($"Can't load texture from file '{path}'.");
+            while (!task.IsCompleted)
+                yield return null;
 
-            yield return null;
+            if (error != null)
+                Debug.LogWarning($"Background tile IO failed: {error.Message}");
         }
 
-        private IEnumerator SaveTextureToFile(string path, Texture2D texture)
+        private IEnumerator LoadTextureFromFileAsync(string path, Texture2D texture)
         {
+            byte[] fileData = null;
+            Exception error = null;
+
+            var task = Task.Run(() =>
+            {
+                try
+                {
+                    fileData = File.ReadAllBytes(path);
+                }
+                catch (Exception e)
+                {
+                    error = e;
+                }
+            });
+
+            while (!task.IsCompleted)
+                yield return null;
+
+            if (this == null)
+                yield break;
+
+            if (error != null || fileData == null || fileData.Length == 0)
+            {
+                Debug.LogWarning($"Can't load texture from file '{path}'.");
+                yield break;
+            }
+
+            // PNG decode / GPU upload must happen on the main thread — budget it per frame.
+            yield return WaitForTextureOpSlot();
+            if (this == null)
+                yield break;
+
+            if (!texture.LoadImage(fileData))
+                Debug.LogWarning($"Can't decode texture from file '{path}'.");
+        }
+
+        private IEnumerator SaveTextureToFileAsync(string path, Texture2D texture)
+        {
+            if (texture == null || string.IsNullOrEmpty(path))
+                yield break;
+
+            yield return WaitForTextureOpSlot();
+            if (this == null || texture == null)
+                yield break;
+
+            byte[] encoded;
             try
+            {
+                encoded = texture.EncodeToPNG();
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"Can't encode texture for '{path}': {e.Message}");
+                yield break;
+            }
+
+            if (encoded == null || encoded.Length == 0)
+                yield break;
+
+            yield return RunOffMainThread(() =>
             {
                 var dir = Path.GetDirectoryName(path);
                 if (!Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
 
-                File.WriteAllBytes(path, texture.EncodeToPNG());
-            }
-            catch
-            {
-                Debug.LogWarning($"Can't save texture to file '{path}'.");
-            }
-
-            yield return null;
+                File.WriteAllBytes(path, encoded);
+            });
         }
 
         private void DisposeActiveRequest()
@@ -279,6 +410,7 @@ namespace CustomGeo
 
             // Must dispose explicitly: StopCoroutine does not run iterator finally/using.
             DisposeActiveRequest();
+            ReleaseDownloadSlot();
             ReleaseOwnedResources(releaseMesh: true);
         }
     }

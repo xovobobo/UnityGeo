@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -6,6 +7,8 @@ namespace CustomGeo
 {
     public abstract class MapBase : MonoBehaviour
     {
+        private const int InitialTilesPerFrame = 12;
+
         private readonly object _stateLock = new object();
         protected object StateLock => _stateLock;
 
@@ -36,6 +39,10 @@ namespace CustomGeo
 
         private protected GameObject tiles;
         protected Dictionary<(int, int, int), MonoBehaviour> activeTiles = new Dictionary<(int, int, int), MonoBehaviour>();
+        private readonly Dictionary<(int z, int tx), Transform> _tileParents = new();
+
+        private Coroutine _initialGenerateCoroutine;
+        private bool _initialGenerateRunning;
 
         public bool IsInitialized { get; private set; }
 
@@ -52,8 +59,15 @@ namespace CustomGeo
             }
         }
 
+        private void OnDestroy()
+        {
+            StopInitialGeneration();
+        }
+
         public void InitMap()
         {
+            StopInitialGeneration();
+
             lock (_stateLock)
             {
                 ClearTilesLocked();
@@ -61,15 +75,17 @@ namespace CustomGeo
                 init();
                 SetupTilesContainer();
 
-                if (generateTiles)
-                    generateBlocksStaticLocked();
-
                 IsInitialized = true;
             }
+
+            if (generateTiles)
+                StartInitialGeneration();
         }
 
         public void Reinitialize(double? latOrigin = null, double? lonOrigin = null)
         {
+            StopInitialGeneration();
+
             lock (_stateLock)
             {
                 if (latOrigin.HasValue) LatOrigin = latOrigin.Value;
@@ -78,15 +94,18 @@ namespace CustomGeo
                 ClearTilesLocked();
                 init();
                 SetupTilesContainer();
-                if (generateTiles)
-                    generateBlocksStaticLocked();
                 IsInitialized = true;
             }
+
+            if (generateTiles)
+                StartInitialGeneration();
         }
 
 
         public void ClearTiles()
         {
+            StopInitialGeneration();
+
             lock (_stateLock)
             {
                 ClearTilesLocked();
@@ -100,6 +119,7 @@ namespace CustomGeo
                 if (tile != null) Destroy(tile.gameObject);
             }
             activeTiles.Clear();
+            _tileParents.Clear();
 
             if (tiles != null)
             {
@@ -121,15 +141,79 @@ namespace CustomGeo
             }
         }
 
+        private void StopInitialGeneration()
+        {
+            if (_initialGenerateCoroutine != null)
+            {
+                StopCoroutine(_initialGenerateCoroutine);
+                _initialGenerateCoroutine = null;
+            }
+
+            _initialGenerateRunning = false;
+        }
+
+        private void StartInitialGeneration()
+        {
+            StopInitialGeneration();
+            _initialGenerateRunning = true;
+            _initialGenerateCoroutine = StartCoroutine(GenerateBlocksOverFrames());
+        }
+
+        /// <summary>
+        /// Spawns the initial tile grid across multiple frames to avoid a main-thread hitch
+        /// on scene activation (blocks=12 => 625 tiles).
+        /// </summary>
+        private IEnumerator GenerateBlocksOverFrames()
+        {
+            int centerX;
+            int centerY;
+            int z;
+            int b;
+
+            lock (_stateLock)
+            {
+                var tileCenter = new Tile(LatOrigin, LonOrigin, zoom);
+                centerX = tileCenter.x;
+                centerY = tileCenter.y;
+                z = zoom;
+                b = blocks;
+            }
+
+            int spawnedThisFrame = 0;
+
+            for (int x = -b; x <= b; x++)
+            {
+                for (int y = -b; y <= b; y++)
+                {
+                    if (this == null)
+                        yield break;
+
+                    SpawnTile(centerX + x, centerY + y, z);
+                    spawnedThisFrame++;
+
+                    if (spawnedThisFrame >= InitialTilesPerFrame)
+                    {
+                        spawnedThisFrame = 0;
+                        yield return null;
+                    }
+                }
+            }
+
+            _initialGenerateRunning = false;
+            _initialGenerateCoroutine = null;
+        }
+
         protected virtual void Update()
         {
-            if (IsInitialized && udpateDynamicTiles && looking_tf != null)
+            // Wait until the initial grid is finished so CleanupOldTiles does not
+            // destroy tiles that are still being spawned around LatOrigin.
+            if (!IsInitialized || _initialGenerateRunning || !udpateDynamicTiles || looking_tf == null)
+                return;
+
+            lock (_stateLock)
             {
-                lock (_stateLock)
-                {
-                    if (IsInitialized)
-                        UpdateDynamicTilesLogicLocked();
-                }
+                if (IsInitialized && !_initialGenerateRunning)
+                    UpdateDynamicTilesLogicLocked();
             }
         }
 
@@ -181,6 +265,8 @@ namespace CustomGeo
                     Transform xFolder = zFolder.GetChild(i);
                     if (xFolder.childCount == 0 || IsAllChildrenDestroying(xFolder))
                     {
+                        if (int.TryParse(zFolder.name, out int z) && int.TryParse(xFolder.name, out int tx))
+                            _tileParents.Remove((z, tx));
                         Destroy(xFolder.gameObject);
                     }
                 }
@@ -204,22 +290,12 @@ namespace CustomGeo
             return true;
         }
 
-
-
-        private void generateBlocksStaticLocked()
-        {
-            Tile tile_center = new Tile(LatOrigin, LonOrigin, zoom);
-            for (int x = -blocks; x <= blocks; x++)
-            {
-                for (int y = -blocks; y <= blocks; y++)
-                {
-                    SpawnTile(tile_center.x + x, tile_center.y + y, zoom);
-                }
-            }
-        }
-
         protected Transform GetTileParent(int z, int tx)
         {
+            var key = (z, tx);
+            if (_tileParents.TryGetValue(key, out var cached) && cached != null)
+                return cached;
+
             string zName = z.ToString();
             Transform zoomFolder = tiles.transform.Find(zName);
             if (zoomFolder == null)
@@ -236,6 +312,7 @@ namespace CustomGeo
                 xFolder.SetParent(zoomFolder, false);
             }
 
+            _tileParents[key] = xFolder;
             return xFolder;
         }
 
