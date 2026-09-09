@@ -26,8 +26,31 @@ namespace CustomGeo
         public Transform looking_tf;
         public int tileObjectsLayer = 0;
         public string tilemapUrl = "http://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+
+        [Tooltip("Blocks: square grid around looking_tf. OrthoCamera: fill the camera FOV.")]
+        public TileGenerationMode tileGenerationMode = TileGenerationMode.Blocks;
+
+        [Tooltip("Camera used in OrthoCamera mode. If empty, uses looking_tf (or its child/parent) then Camera.main.")]
+        public Camera tileCamera;
+
         [Range(0, 22)]
         public int zoom = 12;
+
+        [Tooltip("Coarsest zoom. Used when even this zoom needs more tiles than maxVisibleTiles, the grid is clamped.")]
+        [Range(0, 22)]
+        public int minZoom = 12;
+
+        [Tooltip("Finest zoom. Used when the FOV fits within maxVisibleTiles.")]
+        [Range(0, 22)]
+        public int maxZoom = 19;
+
+        [Tooltip("Extra FOV margin so tiles do not pop in at the screen edge.")]
+        [Range(0f, 1f)]
+        public float viewPadding = 0.15f;
+
+        [Tooltip("Tile budget. If zoom 19 needs more tiles than this to fill the FOV, drop to 18, then 17, ...")]
+        public int maxVisibleTiles = 512;
+
         public int blocks = 4;
         public string cacheFolder = "";
         public bool store = false;
@@ -35,14 +58,25 @@ namespace CustomGeo
 
         public Material tilesMaterial;
         public bool addTilesCollider = false;
+
+        [Header("Debug")]
+        [Tooltip("Show live tile count and active zoom on screen.")]
+        public bool debugTiles = false;
         #endregion
 
         private protected GameObject tiles;
         protected Dictionary<(int, int, int), MonoBehaviour> activeTiles = new Dictionary<(int, int, int), MonoBehaviour>();
         private readonly Dictionary<(int z, int tx), Transform> _tileParents = new();
+        private readonly HashSet<(int, int, int)> _visibleKeys = new HashSet<(int, int, int)>();
+        private readonly List<Vector3> _frustumPoints = new List<Vector3>();
 
         private Coroutine _initialGenerateCoroutine;
         private bool _initialGenerateRunning;
+        private bool _loggedMissingCamera;
+        private int _orthoLodZoom = -1;
+        private readonly Dictionary<int, int> _debugZoomCounts = new Dictionary<int, int>();
+        private readonly List<int> _debugZoomKeys = new List<int>();
+        private GUIStyle _debugLabelStyle;
 
         public bool IsInitialized { get; private set; }
 
@@ -120,6 +154,7 @@ namespace CustomGeo
             }
             activeTiles.Clear();
             _tileParents.Clear();
+            _orthoLodZoom = -1;
 
             if (tiles != null)
             {
@@ -156,7 +191,31 @@ namespace CustomGeo
         {
             StopInitialGeneration();
             _initialGenerateRunning = true;
-            _initialGenerateCoroutine = StartCoroutine(GenerateBlocksOverFrames());
+            _initialGenerateCoroutine = tileGenerationMode == TileGenerationMode.OrthoCamera
+                ? StartCoroutine(GenerateOrthoCameraOverFrames())
+                : StartCoroutine(GenerateBlocksOverFrames());
+        }
+
+        protected virtual void OnValidate()
+        {
+            zoom = Mathf.Clamp(zoom, 0, 22);
+            minZoom = Mathf.Clamp(minZoom, 0, 22);
+            maxZoom = Mathf.Clamp(maxZoom, 0, 22);
+            if (minZoom > maxZoom)
+            {
+                int tmp = minZoom;
+                minZoom = maxZoom;
+                maxZoom = tmp;
+            }
+
+            viewPadding = Mathf.Clamp(viewPadding, 0f, 1f);
+            maxVisibleTiles = Mathf.Max(maxVisibleTiles, 1);
+            blocks = Mathf.Max(blocks, 0);
+        }
+
+        public Camera ResolveTileCamera()
+        {
+            return OrthoCameraTileGenerator.ResolveCamera(tileCamera, looking_tf);
         }
 
         /// <summary>
@@ -203,18 +262,111 @@ namespace CustomGeo
             _initialGenerateCoroutine = null;
         }
 
+        private IEnumerator GenerateOrthoCameraOverFrames()
+        {
+            Camera cam;
+            int minZ;
+            int maxZ;
+            float pad;
+            int cap;
+
+            lock (_stateLock)
+            {
+                cam = ResolveTileCamera();
+                minZ = minZoom;
+                maxZ = maxZoom;
+                pad = viewPadding;
+                cap = maxVisibleTiles;
+            }
+
+            if (cam == null)
+            {
+                if (!_loggedMissingCamera)
+                {
+                    Debug.LogWarning(
+                        $"{name}: OrthoCamera tile mode needs tileCamera (or a Camera on looking_tf).");
+                    _loggedMissingCamera = true;
+                }
+
+                _initialGenerateRunning = false;
+                _initialGenerateCoroutine = null;
+                yield break;
+            }
+
+            _loggedMissingCamera = false;
+            _visibleKeys.Clear();
+            _orthoLodZoom = OrthoCameraTileGenerator.CollectVisibleTiles(
+                this, cam, minZ, maxZ, pad, cap, _orthoLodZoom, _frustumPoints, _visibleKeys);
+
+            var keys = _visibleKeys.ToList();
+            int spawnedThisFrame = 0;
+            foreach (var key in keys)
+            {
+                if (this == null)
+                    yield break;
+
+                SpawnTile(key.Item2, key.Item3, key.Item1);
+                spawnedThisFrame++;
+
+                if (spawnedThisFrame >= InitialTilesPerFrame)
+                {
+                    spawnedThisFrame = 0;
+                    yield return null;
+                }
+            }
+
+            _initialGenerateRunning = false;
+            _initialGenerateCoroutine = null;
+        }
+
         protected virtual void Update()
         {
             // Wait until the initial grid is finished so CleanupOldTiles does not
             // destroy tiles that are still being spawned around LatOrigin.
-            if (!IsInitialized || _initialGenerateRunning || !udpateDynamicTiles || looking_tf == null)
+            if (!IsInitialized || _initialGenerateRunning || !udpateDynamicTiles)
                 return;
 
             lock (_stateLock)
             {
-                if (IsInitialized && !_initialGenerateRunning)
+                if (!IsInitialized || _initialGenerateRunning)
+                    return;
+
+                if (tileGenerationMode == TileGenerationMode.OrthoCamera)
+                    UpdateOrthoCameraTilesLocked();
+                else if (looking_tf != null)
                     UpdateDynamicTilesLogicLocked();
             }
+        }
+
+        private void UpdateOrthoCameraTilesLocked()
+        {
+            var cam = ResolveTileCamera();
+            if (cam == null)
+            {
+                if (!_loggedMissingCamera)
+                {
+                    Debug.LogWarning(
+                        $"{name}: OrthoCamera tile mode needs tileCamera (or a Camera on looking_tf).");
+                    _loggedMissingCamera = true;
+                }
+
+                return;
+            }
+
+            _loggedMissingCamera = false;
+            _visibleKeys.Clear();
+            _orthoLodZoom = OrthoCameraTileGenerator.CollectVisibleTiles(
+                this, cam, minZoom, maxZoom, viewPadding, maxVisibleTiles, _orthoLodZoom,
+                _frustumPoints, _visibleKeys);
+
+            foreach (var key in _visibleKeys)
+            {
+                if (!activeTiles.ContainsKey(key))
+                    SpawnTile(key.Item2, key.Item3, key.Item1);
+            }
+
+            if (!cacheGameobjects)
+                CleanupOldTiles(_visibleKeys);
         }
 
         private void UpdateDynamicTilesLogicLocked()
@@ -223,7 +375,7 @@ namespace CustomGeo
             Tile tile_center = new Tile(lat: lla.x, lon: lla.y, zoom: zoom);
 
             int maxTiles = 1 << zoom;
-            HashSet<(int, int, int)> frameVisibleKeys = new HashSet<(int, int, int)>();
+            _visibleKeys.Clear();
 
             for (int x = -blocks; x <= blocks; x++)
             {
@@ -232,7 +384,7 @@ namespace CustomGeo
                     int tx = ((tile_center.x + x) % maxTiles + maxTiles) % maxTiles;
                     int ty = ((tile_center.y + y) % maxTiles + maxTiles) % maxTiles;
                     var key = (zoom, tx, ty);
-                    frameVisibleKeys.Add(key);
+                    _visibleKeys.Add(key);
 
                     if (!activeTiles.ContainsKey(key))
                         SpawnTile(tx, ty, zoom);
@@ -240,7 +392,7 @@ namespace CustomGeo
             }
 
             if (!cacheGameobjects)
-                CleanupOldTiles(frameVisibleKeys);
+                CleanupOldTiles(_visibleKeys);
         }
 
         private void CleanupOldTiles(HashSet<(int, int, int)> visibleKeys)
@@ -314,6 +466,97 @@ namespace CustomGeo
 
             _tileParents[key] = xFolder;
             return xFolder;
+        }
+
+        private void OnGUI()
+        {
+            if (!debugTiles)
+                return;
+
+            int total = 0;
+            int minActiveZoom = int.MaxValue;
+            int maxActiveZoom = int.MinValue;
+            _debugZoomCounts.Clear();
+
+            lock (_stateLock)
+            {
+                foreach (var pair in activeTiles)
+                {
+                    if (pair.Value == null)
+                        continue;
+
+                    total++;
+                    int z = pair.Key.Item1;
+                    _debugZoomCounts.TryGetValue(z, out int count);
+                    _debugZoomCounts[z] = count + 1;
+                    if (z < minActiveZoom) minActiveZoom = z;
+                    if (z > maxActiveZoom) maxActiveZoom = z;
+                }
+            }
+
+            string zoomLine;
+            if (total == 0 || _debugZoomCounts.Count == 0)
+            {
+                zoomLine = tileGenerationMode == TileGenerationMode.OrthoCamera
+                    ? $"Zoom: —  (range {minZoom}-{maxZoom})"
+                    : $"Zoom: —  (set {zoom})";
+            }
+            else if (_debugZoomCounts.Count == 1)
+            {
+                zoomLine = $"Zoom: {minActiveZoom}";
+            }
+            else
+            {
+                _debugZoomKeys.Clear();
+                foreach (var z in _debugZoomCounts.Keys)
+                    _debugZoomKeys.Add(z);
+                _debugZoomKeys.Sort();
+
+                string breakdown = "";
+                for (int i = 0; i < _debugZoomKeys.Count; i++)
+                {
+                    int z = _debugZoomKeys[i];
+                    if (i > 0)
+                        breakdown += "  ";
+                    breakdown += $"{z}:{_debugZoomCounts[z]}";
+                }
+
+                zoomLine = $"Zoom: {minActiveZoom}-{maxActiveZoom}  ({breakdown})";
+            }
+
+            string mode = tileGenerationMode == TileGenerationMode.OrthoCamera ? "OrthoCamera" : "Blocks";
+            string text = $"Tiles: {total}\n{zoomLine}\nMode: {mode}";
+
+            var style = GetDebugLabelStyle();
+            var rect = new Rect(12f, 12f, 560f, 110f);
+            DrawOutlinedLabel(rect, text, style);
+        }
+
+        private GUIStyle GetDebugLabelStyle()
+        {
+            if (_debugLabelStyle != null)
+                return _debugLabelStyle;
+
+            _debugLabelStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 22,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.UpperLeft
+            };
+            _debugLabelStyle.normal.textColor = Color.white;
+            return _debugLabelStyle;
+        }
+
+        private static void DrawOutlinedLabel(Rect rect, string text, GUIStyle style)
+        {
+            Color color = style.normal.textColor;
+            style.normal.textColor = Color.black;
+            GUI.Label(new Rect(rect.x - 1f, rect.y, rect.width, rect.height), text, style);
+            GUI.Label(new Rect(rect.x + 1f, rect.y, rect.width, rect.height), text, style);
+            GUI.Label(new Rect(rect.x, rect.y - 1f, rect.width, rect.height), text, style);
+            GUI.Label(new Rect(rect.x, rect.y + 1f, rect.width, rect.height), text, style);
+            style.normal.textColor = color;
+            GUI.Label(rect, text, style);
         }
 
     }
