@@ -82,5 +82,39 @@ namespace CustomGeo
         {
             return new Tile(x, y + 1, zoom);
         }
+
+        /// <summary>
+        /// Parent tile at zoom-1. A parent covers exactly four children at zoom+1.
+        /// </summary>
+        public Tile GetParent()
+        {
+            if (zoom <= 0)
+                return this;
+
+            return new Tile(x >> 1, y >> 1, zoom - 1);
+        }
+
+        /// <summary>
+        /// Child at zoom+1. <paramref name="i"/> and <paramref name="j"/> are 0 or 1.
+        /// </summary>
+        public Tile GetChild(int i, int j)
+        {
+            return new Tile((x << 1) + (i & 1), (y << 1) + (j & 1), zoom + 1);
+        }
+
+        public void GetLatLonBounds(out double north, out double south, out double west, out double east)
+        {
+            (north, west) = GeoConverter.TileToWorldPos(x, y, zoom);
+            (south, east) = GeoConverter.TileToWorldPos(x + 1, y + 1, zoom);
+        }
+
+        public static int Wrap(int index, int zoomLevel)
+        {
+            int maxTiles = 1 << zoomLevel;
+            if (maxTiles <= 0)
+                return 0;
+
+            return ((index % maxTiles) + maxTiles) % maxTiles;
+        }
     }
 }
